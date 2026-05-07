@@ -1,9 +1,8 @@
 import { Address, toNano } from "@ton/core";
 import { Strategy } from "./base";
 import { getState, patchState } from "../core/state";
-import { config } from "../config";
 import { ensureSubwallets, markUsed, nextUnused, sendFromSubwallet } from "../wallet/subwallets";
-import { getMasterWallet } from "../wallet/master";
+import { getFundingWallet } from "../wallet/pool";
 import { pickDex } from "../dex";
 import { logger } from "../core/logger";
 
@@ -43,13 +42,13 @@ export class HoldersBoosterStrategy extends Strategy {
     }
 
     // 1. funding
-    const master = await getMasterWallet();
+    const funder = await getFundingWallet();
     const fundingNano = toNano(p.fundingTon.toFixed(9));
-    await master.send([
+    await funder.send([
       { to: Address.parse(sub.address), value: fundingNano, bounce: false },
     ]);
     logger.info(
-      { sub: sub.address, ton: p.fundingTon },
+      { sub: sub.address, ton: p.fundingTon, funder: funder.record.label },
       "holdersBooster: funding inviato, attendo settle",
     );
     // attesa per la conferma del trasferimento
@@ -58,7 +57,7 @@ export class HoldersBoosterStrategy extends Strategy {
     // 2. buy dal sub
     const buyNano = toNano(p.buyTon.toFixed(9));
     const { adapter, quote } = await pickDex(state.selectedDex, "buy", buyNano);
-    const slippageBp = BigInt(Math.floor(config.MAX_SLIPPAGE_PCT * 100));
+    const slippageBp = BigInt(Math.floor(state.limits.maxSlippagePct * 100));
     const minOut = (quote.amountOut * (10000n - slippageBp)) / 10000n;
     const msg = await adapter.buildSwap(
       "buy",

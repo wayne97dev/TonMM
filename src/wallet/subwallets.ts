@@ -4,7 +4,7 @@ import crypto from "node:crypto";
 import { mnemonicNew, mnemonicToPrivateKey, KeyPair } from "@ton/crypto";
 import { WalletContractV4, internal, SendMode } from "@ton/ton";
 import { Address, beginCell, Cell } from "@ton/core";
-import { tonClient } from "./master";
+import { tonClient } from "./client";
 import { config } from "../config";
 import { logger } from "../core/logger";
 

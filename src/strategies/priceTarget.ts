@@ -3,7 +3,6 @@ import { Strategy } from "./base";
 import { getState } from "../core/state";
 import { executeSwap } from "../core/engine";
 import { pickDex } from "../dex";
-import { config } from "../config";
 import { logger } from "../core/logger";
 
 /**
@@ -20,7 +19,7 @@ export class PriceTargetStrategy extends Strategy {
   private async currentPriceTonPerToken(): Promise<number | null> {
     try {
       const state = getState();
-      const oneToken = BigInt(10) ** BigInt(config.JETTON_DECIMALS);
+      const oneToken = BigInt(10) ** BigInt(state.token.decimals);
       const { quote } = await pickDex(state.selectedDex, "sell", oneToken);
       // amountOut e' in nano TON: prezzo TON per 1 token
       const ton = Number(quote.amountOut) / Number(toNano("1"));

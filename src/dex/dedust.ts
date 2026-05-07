@@ -8,8 +8,8 @@ import {
   VaultJetton,
   JettonRoot,
 } from "@dedust/sdk";
-import { tonClient } from "../wallet/master";
-import { config } from "../config";
+import { tonClient } from "../wallet/client";
+import { requireJettonMaster } from "../core/state";
 import { DexAdapter, BuiltSwapMessage } from "./types";
 import { Quote, Side } from "../types";
 
@@ -30,7 +30,7 @@ export class DedustAdapter implements DexAdapter {
   readonly name = "dedust" as const;
 
   private get jettonAddr(): Address {
-    return Address.parse(config.JETTON_MASTER);
+    return Address.parse(requireJettonMaster());
   }
 
   private factory() {

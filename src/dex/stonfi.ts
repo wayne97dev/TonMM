@@ -1,7 +1,7 @@
 import { Address } from "@ton/core";
 import { DEX, pTON } from "@ston-fi/sdk";
-import { tonClient } from "../wallet/master";
-import { config } from "../config";
+import { tonClient } from "../wallet/client";
+import { requireJettonMaster } from "../core/state";
 import { DexAdapter, BuiltSwapMessage } from "./types";
 import { Quote, Side } from "../types";
 
@@ -43,7 +43,7 @@ export class StonfiAdapter implements DexAdapter {
   }
 
   private get jetton(): Address {
-    return Address.parse(config.JETTON_MASTER);
+    return Address.parse(requireJettonMaster());
   }
 
   private get proxyTon(): Address {

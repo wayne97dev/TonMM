@@ -18,7 +18,7 @@ const schema = z.object({
   TON_API_KEY: z.string().optional().default(""),
   TON_NETWORK: z.enum(["mainnet", "testnet"]).default("mainnet"),
 
-  MASTER_MNEMONIC: z.string().min(20),
+  MASTER_MNEMONIC: z.string().default(""),
   HIGHLOAD_SUBWALLET_ID: z.coerce.number().int().default(0x10ad),
   HIGHLOAD_TIMEOUT: z.coerce.number().int().default(128),
 

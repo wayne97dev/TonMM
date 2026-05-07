@@ -77,6 +77,18 @@ export interface StrategyParams {
   };
 }
 
+export interface TokenSettings {
+  master: string | null; // jetton master EQ...
+  decimals: number;
+  symbol: string;
+}
+
+export interface SessionLimits {
+  maxTradeTon: number;
+  sessionBudgetTon: number;
+  maxSlippagePct: number;
+}
+
 export interface RuntimeState {
   active: Partial<Record<StrategyName, boolean>>;
   spentTon: number; // dall'avvio
@@ -85,4 +97,6 @@ export interface RuntimeState {
   selectedDex: DexChoice;
   params: StrategyParams;
   holdersCreated: number;
+  token: TokenSettings;
+  limits: SessionLimits;
 }

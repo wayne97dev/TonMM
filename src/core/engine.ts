@@ -1,96 +1,88 @@
 import { toNano } from "@ton/core";
-import PQueue from "p-queue";
-import { config } from "../config";
 import { logger } from "./logger";
 import { getState, patchState, saveState } from "./state";
 import { DexChoice, Side, SwapResult } from "../types";
 import { pickDex } from "../dex";
-import { getMasterWallet } from "../wallet/master";
+import { pickWalletRR, getInstanceById } from "../wallet/pool";
 
 /**
- * Coda globale: serializza l'invio degli external dal master wallet
- * (un seqno alla volta) per evitare collisioni.
- */
-const masterQueue = new PQueue({ concurrency: 1 });
-
-/**
- * Esegue uno swap dal master wallet sulla DEX scelta.
- * - amountIn in unita' decimali (TON o token interi -> verra' convertito)
+ * Esegue uno swap dal pool wallet sulla DEX scelta.
+ * - Se walletId e' specificato usa quel wallet, altrimenti round-robin
+ *   sui wallet attivi nel pool (max 5).
  */
 export async function executeSwap(args: {
   side: Side;
   amount: number; // TON per buy, token interi per sell
   dexChoice?: DexChoice;
+  walletId?: number;
 }): Promise<SwapResult> {
   const state = getState();
   const choice: DexChoice = args.dexChoice ?? state.selectedDex;
 
-  // Budget guard
   if (args.side === "buy") {
-    if (args.amount > config.MAX_TRADE_TON) {
-      return ko("trade size oltre MAX_TRADE_TON");
+    if (args.amount > state.limits.maxTradeTon) {
+      return ko(`trade size oltre maxTradeTon (${state.limits.maxTradeTon})`);
     }
-    if (state.spentTon + args.amount > config.SESSION_BUDGET_TON) {
+    if (state.spentTon + args.amount > state.limits.sessionBudgetTon) {
       return ko("session budget esaurito");
     }
   }
 
-  const decimals = config.JETTON_DECIMALS;
+  const decimals = state.token.decimals;
   const amountInNano =
     args.side === "buy"
       ? toNano(args.amount.toFixed(9))
       : BigInt(Math.floor(args.amount * 10 ** decimals));
 
-  return masterQueue.add(async (): Promise<SwapResult> => {
-    try {
-      const master = await getMasterWallet();
-      const { adapter, quote } = await pickDex(choice, args.side, amountInNano);
+  try {
+    const wallet =
+      args.walletId !== undefined
+        ? await getInstanceById(args.walletId)
+        : await pickWalletRR();
+    if (!wallet) return ko(`wallet ${args.walletId} non trovato`);
 
-      const slippageBp = BigInt(Math.floor(config.MAX_SLIPPAGE_PCT * 100));
-      const minOut =
-        (quote.amountOut * (10000n - slippageBp)) / 10000n;
+    const { adapter, quote } = await pickDex(choice, args.side, amountInNano);
 
-      const msg = await adapter.buildSwap(
-        args.side,
-        amountInNano,
-        minOut,
-        master.address,
-      );
+    const slippageBp = BigInt(Math.floor(state.limits.maxSlippagePct * 100));
+    const minOut = (quote.amountOut * (10000n - slippageBp)) / 10000n;
 
-      await master.send([msg]);
+    const msg = await adapter.buildSwap(
+      args.side,
+      amountInNano,
+      minOut,
+      wallet.address,
+    );
 
-      const newSpent =
-        state.spentTon + (args.side === "buy" ? args.amount : 0);
-      patchState({
-        spentTon: newSpent,
-        trades: state.trades + 1,
-      });
+    await wallet.send([msg]);
 
-      logger.info(
-        {
-          dex: adapter.name,
-          side: args.side,
-          amountIn: amountInNano.toString(),
-          minOut: minOut.toString(),
-        },
-        "swap inviato",
-      );
+    const newSpent = state.spentTon + (args.side === "buy" ? args.amount : 0);
+    patchState({ spentTon: newSpent, trades: state.trades + 1 });
 
-      return {
+    logger.info(
+      {
         dex: adapter.name,
         side: args.side,
-        amountIn: amountInNano,
-        amountOutMin: minOut,
-        ok: true,
-      };
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      logger.error({ err: message }, "swap fallito");
-      patchState({ lastError: message });
-      saveState();
-      return ko(message);
-    }
-  }) as Promise<SwapResult>;
+        wallet: wallet.record.label,
+        amountIn: amountInNano.toString(),
+        minOut: minOut.toString(),
+      },
+      "swap inviato",
+    );
+
+    return {
+      dex: adapter.name,
+      side: args.side,
+      amountIn: amountInNano,
+      amountOutMin: minOut,
+      ok: true,
+    };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ err: message }, "swap fallito");
+    patchState({ lastError: message });
+    saveState();
+    return ko(message);
+  }
 }
 
 function ko(error: string): SwapResult {
