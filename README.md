@@ -46,14 +46,41 @@ src/
 ## Setup
 
 ```bash
-git clone <repo> && cd TonMM
+git clone https://github.com/wayne97dev/tonmm.git TonMM
+cd TonMM
+git checkout claude/ton-telegram-market-maker-pfsEK
 cp .env.example .env
-# compila .env (vedi sotto)
+# apri .env e metti almeno TELEGRAM_BOT_TOKEN (puoi lasciare TELEGRAM_ADMIN_IDS vuoto al primo giro)
 npm install
-npm run dev          # avvio in dev (ts-node)
-# oppure
-npm run build && npm start
+npm run build
+npm start
 ```
+
+## Deploy con pm2 (sempre attivo, riparte da solo)
+
+```bash
+# dentro la cartella TonMM, dopo `npm run build`
+npm install -g pm2
+pm2 start ecosystem.config.js
+pm2 logs tonmm           # vedi i log live (Ctrl-C per uscire)
+pm2 save                 # persiste la lista processi
+pm2 startup              # esegui il comando che pm2 ti stampa per partire al boot
+pm2 restart tonmm        # quando vuoi riavviare
+pm2 stop tonmm           # quando vuoi fermare
+```
+
+### Mac: evitare lo sleep (altrimenti il bot smette di tradare)
+
+Se lo lasci girare sul Mac:
+
+```bash
+# tieni il Mac sveglio finche' fai girare il comando (rilascialo con Ctrl-C)
+caffeinate -dis
+```
+
+Oppure, in modo permanente: **Impostazioni di Sistema → Batteria / Adattatore di alimentazione → "Impedisci la sospensione automatica quando il display e' spento"**. Per fare in modo che continui anche col coperchio chiuso serve un'app come *Amphetamine* (gratis su App Store) o *Caffeine*.
+
+> Per un MM serio meglio un VPS economico (Hetzner / DigitalOcean ~5€/mese): sempre online, niente problemi di sleep.
 
 ### Compilazione `.env`
 
