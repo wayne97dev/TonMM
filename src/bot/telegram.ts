@@ -220,12 +220,17 @@ export async function startTelegramBot(): Promise<Bot> {
     const lines: string[] = [];
     for (const w of all) {
       const inst = await getInstanceById(w.id);
-      const bal = inst ? await inst.balanceTon() : 0n;
+      let bal = 0n;
+      try {
+        bal = inst ? await inst.balanceTon() : 0n;
+      } catch (e) {
+        logger.warn({ err: e instanceof Error ? e.message : String(e), id: w.id }, "balance: fetch fail");
+      }
       lines.push(
-        `*#${w.id}* ${w.label} ${w.active ? "[ON]" : "[off]"} - ${fromNano(bal)} TON`,
+        `#${w.id} ${w.label} ${w.active ? "ON" : "off"} - ${fromNano(bal)} TON`,
       );
     }
-    await ctx.reply(lines.join("\n"), { parse_mode: "Markdown" });
+    await ctx.reply(lines.join("\n"));
   });
 
   // ===== Inline callbacks =====
@@ -430,30 +435,35 @@ async function sendStatus(ctx: Context, edit = false) {
 async function sendWalletsList(ctx: Context, edit = false) {
   const all = listWallets();
   const sel = getSelectedId();
-  const lines: string[] = ["*Wallet pool*", ""];
+  const lines: string[] = ["Wallet pool", ""];
   if (all.length === 0) {
     lines.push("Pool vuoto. Crea un wallet con /wallet_new");
   } else {
     for (const w of all) {
       const inst = await getInstanceById(w.id);
-      const bal = inst ? await inst.balanceTon() : 0n;
+      let bal = 0n;
+      try {
+        bal = inst ? await inst.balanceTon() : 0n;
+      } catch (e) {
+        logger.warn({ err: e instanceof Error ? e.message : String(e), id: w.id }, "wallets list: balance fail");
+      }
       lines.push(
-        `*#${w.id}* ${w.label} ${w.active ? "[ON]" : "[off]"}${w.id === sel ? " (selected)" : ""}`,
+        `#${w.id} ${w.label} ${w.active ? "ON" : "off"}${w.id === sel ? " (selected)" : ""}`,
       );
-      lines.push(`   \`${w.address}\` - ${fromNano(bal)} TON`);
+      lines.push(`   ${w.address} - ${fromNano(bal)} TON`);
     }
   }
   lines.push("");
   lines.push("Comandi:");
-  lines.push("/wallet_new [label] - crea nuovo wallet");
-  lines.push("/wallet_activate <id> | /wallet_deactivate <id>");
-  lines.push("/wallet_select <id> - imposta come primary");
-  lines.push("/wallet_remove <id> - rimuovi (perdi accesso)");
-  lines.push("/wallet_export <id> - mostra mnemonic (backup)");
-  lines.push("/wallet_import <label> | <24 parole> - importa esterno");
+  lines.push("/wallet_new label   - crea nuovo wallet");
+  lines.push("/wallet_activate ID   |   /wallet_deactivate ID");
+  lines.push("/wallet_select ID   - imposta come primary");
+  lines.push("/wallet_remove ID   - rimuovi (perdi accesso se non hai backup)");
+  lines.push("/wallet_export ID   - mostra mnemonic (backup)");
+  lines.push("/wallet_import label | 24 parole   - importa esterno");
 
   const kb = new InlineKeyboard().text("Menu", "menu");
-  const opts = { parse_mode: "Markdown" as const, reply_markup: kb };
+  const opts = { reply_markup: kb };
   const text = lines.join("\n");
   if (edit && ctx.callbackQuery?.message) {
     try {
